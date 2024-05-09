@@ -1,5 +1,5 @@
 pkgname=mingw-w64-qwt
-pkgver=6.2.0
+pkgver=6.3.0
 pkgrel=1
 pkgdesc="Qt Widgets for Technical Applications (mingw-w64)"
 arch=('any')
@@ -9,7 +9,7 @@ depends=('mingw-w64-qt5-svg')
 makedepends=('mingw-w64-gcc')
 options=('staticlibs' '!strip' '!buildflags')
 source=("http://downloads.sourceforge.net/qwt/qwt-${pkgver}.tar.bz2")
-sha256sums=('9194f6513955d0fd7300f67158175064460197abab1a92fa127a67a4b0b71530')
+sha256sums=('dcb085896c28aaec5518cbc08c0ee2b4e60ada7ac929d82639f6189851a6129a')
 
 _architectures="i686-w64-mingw32 x86_64-w64-mingw32"
 
@@ -23,14 +23,13 @@ prepare() {
   sed -i 's|+= QwtDesigner|-= QwtDesigner|' qwtconfig.pri
 
   # Make install locations consistent with Arch's native Qwt:
-  sed -i 's|$${QWT_INSTALL_PREFIX}/doc|$${QWT_INSTALL_PREFIX}/share/doc/qwt|' qwtconfig.pri
-  sed -i 's|$${QWT_INSTALL_PREFIX}/include|$${QWT_INSTALL_PREFIX}/include/qwt|' qwtconfig.pri
+  sed -e '/^QWT_INSTALL_DOCS/ s|/doc|/share/doc/qwt|' \
+      -e '/^QWT_INSTALL_HEADERS/ s|include|&/qwt|' \
+      -e '/^QWT_INSTALL_PLUGINS/ s|plugins/designer|lib/qt/&|' \
+      -e '/^QWT_INSTALL_FEATURES/ s|features|lib/qt/mkspecs/&|' \
+      -i qwtconfig.pri
 
-  # No need for docs:
-  sed -i "s|= target doc|= target|" src/src.pro
-
-  # splinetest fails to link
-  sed -i "/splinetest/d" tests/tests.pro
+  sed -e "/QwtExamples/d" -e "/QwtTests/d" -e "/QwtPlayground/d" -i qwtconfig.pri
 }
 
 build() {
@@ -51,23 +50,13 @@ build() {
 }
 
 package() {
-
-  for _target in ${_architectures}; do
-
-    cd "${srcdir}/${pkgname}-${pkgver}-build-${_target}/qwt-${pkgver}"
-
-    make INSTALL_ROOT=${pkgdir} QTDIR=/usr/${_target}/ install
-
-    cd "${pkgdir}/usr/${_target}"
-
-    # Move DLLs from lib to bin
-    mkdir -p bin
-    mv lib/*.dll bin/
-    ${_target}-strip --strip-unneeded "$pkgdir"/usr/${_target}/bin/*.dll
-    ${_target}-strip -g "$pkgdir"/usr/${_target}/lib/*.a
-    # Move features to share/qt/mkspecs
-    rm -rf "$pkgdir"/usr/${_target}/share
-    mkdir -p lib/qt/mkspecs
-    mv features lib/qt/mkspecs
+  for _arch in ${_architectures}; do
+    cd "${srcdir}/${pkgname}-${pkgver}-build-${_arch}/qwt-${pkgver}"
+    make INSTALL_ROOT=${pkgdir} QTDIR=/usr/${_arch}/ install
+    rm -r "$pkgdir"/usr/${_arch}/share
+    install -d "${pkgdir}"/usr/${_arch}/bin
+    mv "${pkgdir}"/usr/${_arch}/lib/*.dll "${pkgdir}"/usr/${_arch}/bin
+    ${_arch}-strip --strip-unneeded "$pkgdir"/usr/${_arch}/bin/*.dll
+    ${_arch}-strip -g "$pkgdir"/usr/${_arch}/lib/*.a
   done
 }
